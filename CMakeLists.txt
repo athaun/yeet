@@ -26,7 +26,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
-target_link_libraries(App PRIVATE glfw webgpu)
+FetchContent_Declare(
+  glfw3webgpu
+  GIT_REPOSITORY https://github.com/eliemichel/glfw3webgpu
+  GIT_TAG        main
+)
+FetchContent_MakeAvailable(glfw3webgpu)
+
+target_link_libraries(App PRIVATE glfw webgpu glfw3webgpu)
 
 target_copy_webgpu_binaries(App)
 
