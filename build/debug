@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -xe
+cmake -DCMAKE_BUILD_TYPE=Debug -G Ninja -B build
+ninja -C build

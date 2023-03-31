@@ -1,14 +1,8 @@
 cmake_minimum_required(VERSION 3.0...3.25)
 project(
-	LearnWebGPU # name of the project, which will also be the name of the visual studio solution if you use it
-	VERSION 0.1.0 # any version number
-	LANGUAGES CXX C # programming languages used by the project
-)
-
-add_executable(App main.cpp)
-set_target_properties(App PROPERTIES
-	CXX_STANDARD 23
-	COMPILE_WARNING_AS_ERROR ON
+  yeet
+  VERSION 0.1.0
+	LANGUAGES CXX C
 )
 
 include(FetchContent)
@@ -26,7 +20,24 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
-target_link_libraries(App PRIVATE glfw webgpu)
+add_executable(yeet_exe src/entry.cpp)
+if (MSVC)
+	target_compile_options(yeet_exe PRIVATE /W4)
+else()
+  target_compile_options(yeet_exe PRIVATE -Wall -Wextra -Wno-c++20-extensions -pedantic)
+endif()
 
-target_copy_webgpu_binaries(App)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  target_compile_options(yeet_exe PRIVATE -O3)
+else()
+  target_link_options(yeet_exe PUBLIC -fsanitize=address -lasan)
+  target_compile_options(yeet_exe PRIVATE -O0 -g)
+endif()
 
+target_link_libraries(yeet_exe
+  PRIVATE
+    glfw
+    webgpu
+)
+
+target_copy_webgpu_binaries(yeet_exe)
