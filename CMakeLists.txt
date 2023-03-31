@@ -5,7 +5,12 @@ project(
 	LANGUAGES CXX C # programming languages used by the project
 )
 
-add_executable(App main.cpp)
+add_executable(App
+	main.cpp
+	webgpu-utils.h
+	webgpu-utils.cpp
+)
+
 set_target_properties(App PROPERTIES
 	CXX_STANDARD 23
 	COMPILE_WARNING_AS_ERROR ON

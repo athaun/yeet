@@ -1,200 +1,157 @@
-/**
- * This file is part of the "Learn WebGPU for C++" book.
- *   https://github.com/eliemichel/LearnWebGPU
- * 
- * MIT License
- * Copyright (c) 2022 Elie Michel
- * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 
-#include "glfw3webgpu.h"
-
-#include <GLFW/glfw3.h>
-
-#include "webgpu/webgpu.h"
-
-#include <iostream>
-#include <cassert>
 #include <vector>
+#include <GLFW/glfw3.h>
+#include <cassert>
+#include <iostream>
+
+#include "webgpu-utils.h"
+#include "glfw3webgpu.h"
+#include "webgpu/webgpu.h"
+#include "webgpu/wgpu.h"
+// This header contains non-standard extensions of webgpu.h provided by the
+// wgpu-native implementation. This implementation requires us to use the
+// non-standard procedure wgpuTextureViewDrop (otherwise we try to remain
+// standard-only).
 
 #define UNUSED(x) (void)x;
 
-/**
- * Utility function to get a WebGPU adapter, so that
- *     WGPUAdapter adapter = requestAdapter(options);
- * is roughly equivalent to
- *     const adapter = await navigator.gpu.requestAdapter(options);
- */
-WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions const * options) {
-	// A simple structure holding the local information shared with the
-	// onAdapterRequestEnded callback.
-	struct UserData {
-		WGPUAdapter adapter = nullptr;
-		bool requestEnded = false;
-	};
-	UserData userData;
+int main(int, char **) {
+  WGPUInstanceDescriptor desc = {};
+  desc.nextInChain = nullptr;
+  WGPUInstance instance = wgpuCreateInstance(&desc);
+  if (!instance) {
+    std::cerr << "Could not initialize WebGPU!" << std::endl;
+    return 1;
+  }
 
-	// Callback called by wgpuInstanceRequestAdapter when the request returns
-	// This is a C++ lambda function, but could be any function defined in the
-	// global scope. It must be non-capturing (the brackets [] are empty) so
-	// that it behaves like a regular C function pointer, which is what
-	// wgpuInstanceRequestAdapter expects (WebGPU being a C API). The workaround
-	// is to convey what we want to capture through the pUserData pointer,
-	// provided as the last argument of wgpuInstanceRequestAdapter and received
-	// by the callback as its last argument.
-	auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const * message, void * pUserData) {
-		UserData& userData = *reinterpret_cast<UserData*>(pUserData);
-		if (status == WGPURequestAdapterStatus_Success) {
-			userData.adapter = adapter;
-		} else {
-			std::cout << "Could not get WebGPU adapter: " << message << std::endl;
-		}
-		userData.requestEnded = true;
-	};
+  if (!glfwInit()) {
+    std::cerr << "Could not initialize GLFW!" << std::endl;
+    return 1;
+  }
 
-	// Call to the WebGPU request adapter procedure
-	wgpuInstanceRequestAdapter(
-		instance /* equivalent of navigator.gpu */,
-		options,
-		onAdapterRequestEnded,
-		(void*)&userData
-	);
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+  GLFWwindow *window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
+  if (!window) {
+    std::cerr << "Could not open window!" << std::endl;
+    return 1;
+  }
 
-	// In theory we should wait until onAdapterReady has been called, which
-	// could take some time (what the 'await' keyword does in the JavaScript
-	// code). In practice, we know that when the wgpuInstanceRequestAdapter()
-	// function returns its callback has been called.
-	assert(userData.requestEnded);
+  std::cout << "Requesting adapter..." << std::endl;
+  WGPUSurface surface = glfwGetWGPUSurface(instance, window);
+  WGPURequestAdapterOptions adapterOpts = {};
+  adapterOpts.nextInChain = nullptr;
+  adapterOpts.compatibleSurface = surface;
+  WGPUAdapter adapter = requestAdapter(instance, &adapterOpts);
+  std::cout << "Got adapter: " << adapter << std::endl;
 
-	return userData.adapter;
-}
+  std::cout << "Requesting device..." << std::endl;
+  WGPUDeviceDescriptor deviceDesc = {};
+  deviceDesc.nextInChain = nullptr;
+  deviceDesc.label = "My Device";
+  deviceDesc.requiredFeaturesCount = 0;
+  deviceDesc.requiredLimits = nullptr;
+  deviceDesc.defaultQueue.nextInChain = nullptr;
+  deviceDesc.defaultQueue.label = "The default queue";
+  WGPUDevice device = requestDevice(adapter, &deviceDesc);
+  std::cout << "Got device: " << device << std::endl;
 
-/**
- * An example of how we can inspect the capabilities of the hardware through
- * the adapter object.
- */
-void inspectAdapter(WGPUAdapter adapter) {
-	std::vector<WGPUFeatureName> features;
-	size_t featureCount = wgpuAdapterEnumerateFeatures(adapter, nullptr);
-	features.resize(featureCount);
-	wgpuAdapterEnumerateFeatures(adapter, features.data());
+  WGPUQueue queue = wgpuDeviceGetQueue(device);
 
-	std::cout << "Adapter features:" << std::endl;
-	for (auto f : features) {
-		std::cout << " - " << f << std::endl;
-	}
+  std::cout << "Creating swapchain device..." << std::endl;
 
-	WGPUSupportedLimits limits = {};
-	limits.nextInChain = nullptr;
-	bool success = wgpuAdapterGetLimits(adapter, &limits);
-	if (success) {
-		std::cout << "Adapter limits:" << std::endl;
-		std::cout << " - maxTextureDimension1D: " << limits.limits.maxTextureDimension1D << std::endl;
-		std::cout << " - maxTextureDimension2D: " << limits.limits.maxTextureDimension2D << std::endl;
-		std::cout << " - maxTextureDimension3D: " << limits.limits.maxTextureDimension3D << std::endl;
-		std::cout << " - maxTextureArrayLayers: " << limits.limits.maxTextureArrayLayers << std::endl;
-		std::cout << " - maxBindGroups: " << limits.limits.maxBindGroups << std::endl;
-		std::cout << " - maxDynamicUniformBuffersPerPipelineLayout: " << limits.limits.maxDynamicUniformBuffersPerPipelineLayout << std::endl;
-		std::cout << " - maxDynamicStorageBuffersPerPipelineLayout: " << limits.limits.maxDynamicStorageBuffersPerPipelineLayout << std::endl;
-		std::cout << " - maxSampledTexturesPerShaderStage: " << limits.limits.maxSampledTexturesPerShaderStage << std::endl;
-		std::cout << " - maxSamplersPerShaderStage: " << limits.limits.maxSamplersPerShaderStage << std::endl;
-		std::cout << " - maxStorageBuffersPerShaderStage: " << limits.limits.maxStorageBuffersPerShaderStage << std::endl;
-		std::cout << " - maxStorageTexturesPerShaderStage: " << limits.limits.maxStorageTexturesPerShaderStage << std::endl;
-		std::cout << " - maxUniformBuffersPerShaderStage: " << limits.limits.maxUniformBuffersPerShaderStage << std::endl;
-		std::cout << " - maxUniformBufferBindingSize: " << limits.limits.maxUniformBufferBindingSize << std::endl;
-		std::cout << " - maxStorageBufferBindingSize: " << limits.limits.maxStorageBufferBindingSize << std::endl;
-		std::cout << " - minUniformBufferOffsetAlignment: " << limits.limits.minUniformBufferOffsetAlignment << std::endl;
-		std::cout << " - minStorageBufferOffsetAlignment: " << limits.limits.minStorageBufferOffsetAlignment << std::endl;
-		std::cout << " - maxVertexBuffers: " << limits.limits.maxVertexBuffers << std::endl;
-		std::cout << " - maxVertexAttributes: " << limits.limits.maxVertexAttributes << std::endl;
-		std::cout << " - maxVertexBufferArrayStride: " << limits.limits.maxVertexBufferArrayStride << std::endl;
-		std::cout << " - maxInterStageShaderComponents: " << limits.limits.maxInterStageShaderComponents << std::endl;
-		std::cout << " - maxComputeWorkgroupStorageSize: " << limits.limits.maxComputeWorkgroupStorageSize << std::endl;
-		std::cout << " - maxComputeInvocationsPerWorkgroup: " << limits.limits.maxComputeInvocationsPerWorkgroup << std::endl;
-		std::cout << " - maxComputeWorkgroupSizeX: " << limits.limits.maxComputeWorkgroupSizeX << std::endl;
-		std::cout << " - maxComputeWorkgroupSizeY: " << limits.limits.maxComputeWorkgroupSizeY << std::endl;
-		std::cout << " - maxComputeWorkgroupSizeZ: " << limits.limits.maxComputeWorkgroupSizeZ << std::endl;
-		std::cout << " - maxComputeWorkgroupsPerDimension: " << limits.limits.maxComputeWorkgroupsPerDimension << std::endl;
-	}
+  // We describe the Swap Chain that is used to present rendered textures on
+  // screen. Note that it is specific to a given window size so don't resize.
+  WGPUSwapChainDescriptor swapChainDesc = {};
+  swapChainDesc.width = 640;
+  swapChainDesc.height = 480;
 
-	WGPUAdapterProperties properties = {};
-	properties.nextInChain = nullptr;
-	wgpuAdapterGetProperties(adapter, &properties);
-	std::cout << "Adapter properties:" << std::endl;
-	std::cout << " - vendorID: " << properties.vendorID << std::endl;
-	std::cout << " - deviceID: " << properties.deviceID << std::endl;
-	std::cout << " - name: " << properties.name << std::endl;
-	if (properties.driverDescription) {
-		std::cout << " - driverDescription: " << properties.driverDescription << std::endl;
-	}
-	std::cout << " - adapterType: " << properties.adapterType << std::endl;
-	std::cout << " - backendType: " << properties.backendType << std::endl;
-}
+  // Like buffers, textures are allocated for a specific usage. In our case,
+  // we will use them as the target of a Render Pass so it needs to be created
+  // with the `RenderAttachment` usage flag.
+  swapChainDesc.usage = WGPUTextureUsage_RenderAttachment;
 
-int main (int, char**) {
-	WGPUInstanceDescriptor desc = {};
-	desc.nextInChain = nullptr;
-	WGPUInstance instance = wgpuCreateInstance(&desc);
-	if (!instance) {
-		std::cerr << "Could not initialize WebGPU!" << std::endl;
-		return 1;
-	}
+  // The swap chain textures use the color format suggested by the target
+  // surface.
+  WGPUTextureFormat swapChainFormat =
+      wgpuSurfaceGetPreferredFormat(surface, adapter);
+  swapChainDesc.format = swapChainFormat;
 
-	if (!glfwInit()) {
-		std::cerr << "Could not initialize GLFW!" << std::endl;
-		return 1;
-	}
+  // FIFO stands for "first in, first out", meaning that the presented
+  // texture is always the oldest one, like a regular queue.
+  swapChainDesc.presentMode = WGPUPresentMode_Fifo;
 
-	// We ask GLFW not to set up any graphics API, we'll do it manually
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  // Finally create the Swap Chain
+  WGPUSwapChain swapChain =
+      wgpuDeviceCreateSwapChain(device, surface, &swapChainDesc);
 
-	GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
-	if (!window) {
-		std::cerr << "Could not open window!" << std::endl;
-		return 1;
-	}
+  std::cout << "Swapchain: " << swapChain << std::endl;
 
-	std::cout << "Requesting adapter..." << std::endl;
+  while (!glfwWindowShouldClose(window)) {
+    glfwPollEvents();
 
-	// Utility function provided by glfw3webgpu.h
-	WGPUSurface surface = glfwGetWGPUSurface(instance, window);
+    // Get the texture where to draw the next frame
+    WGPUTextureView nextTexture = wgpuSwapChainGetCurrentTextureView(swapChain);
+    // Getting the texture may fail, in particular if the window has been
+    // resized and thus the target surface changed.
+    if (!nextTexture) {
+      std::cerr << "Cannot acquire next swap chain texture" << std::endl;
+      return 1;
+    }
+    std::cout << "nextTexture: " << nextTexture << std::endl;
 
-	// Adapter options: we need the adapter to draw to the window's surface
-	WGPURequestAdapterOptions adapterOpts = {};
-	adapterOpts.nextInChain = nullptr;
-	adapterOpts.compatibleSurface = surface;
+    WGPUCommandEncoderDescriptor commandEncoderDesc = {};
+    commandEncoderDesc.nextInChain = nullptr;
+    commandEncoderDesc.label = "Command Encoder";
+    WGPUCommandEncoder encoder =
+        wgpuDeviceCreateCommandEncoder(device, &commandEncoderDesc);
 
-	// Get the adapter, see the comments in the definition of the body of the
-	// requestAdapter function above.
-	WGPUAdapter adapter = requestAdapter(instance, &adapterOpts);
+    // Describe a render pass, which targets the texture view
+    WGPURenderPassDescriptor renderPassDesc = {};
 
-	std::cout << "Got adapter: " << adapter << std::endl;
+    WGPURenderPassColorAttachment renderPassColorAttachment = {};
+    // The attachment is tighed to the view returned by the swap chain, so that
+    // the render pass draws directly on screen.
+    renderPassColorAttachment.view = nextTexture;
+    // Not relevant here because we do not use multi-sampling
+    renderPassColorAttachment.resolveTarget = nullptr;
+    renderPassColorAttachment.loadOp = WGPULoadOp_Clear;
+    renderPassColorAttachment.storeOp = WGPUStoreOp_Store;
+    renderPassColorAttachment.clearValue = WGPUColor{0.9, 0.1, 0.2, 1.0};
+    renderPassDesc.colorAttachmentCount = 1;
+    renderPassDesc.colorAttachments = &renderPassColorAttachment;
 
-	inspectAdapter(adapter);
+    // No depth buffer for now
+    renderPassDesc.depthStencilAttachment = nullptr;
 
-	while (!glfwWindowShouldClose(window)) {
-		glfwPollEvents();
-	}
+    // We do not use timers for now neither
+    renderPassDesc.timestampWriteCount = 0;
+    renderPassDesc.timestampWrites = nullptr;
 
-	glfwDestroyWindow(window);
-	glfwTerminate();
+    renderPassDesc.nextInChain = nullptr;
 
-	return 0;
+    // Create a render pass. We end it immediately because we use its built-in
+    // mechanism for clearing the screen when it begins (see descriptor).
+    WGPURenderPassEncoder renderPass =
+        wgpuCommandEncoderBeginRenderPass(encoder, &renderPassDesc);
+    wgpuRenderPassEncoderEnd(renderPass);
+
+    // Non-standard but required by wgpu-native
+    wgpuTextureViewDrop(nextTexture);
+
+    WGPUCommandBufferDescriptor cmdBufferDescriptor = {};
+    cmdBufferDescriptor.nextInChain = nullptr;
+    cmdBufferDescriptor.label = "Command buffer";
+    WGPUCommandBuffer command =
+        wgpuCommandEncoderFinish(encoder, &cmdBufferDescriptor);
+    wgpuQueueSubmit(queue, 1, &command);
+
+    // We can tell the swap chain to present the next texture.
+    wgpuSwapChainPresent(swapChain);
+  }
+
+  glfwDestroyWindow(window);
+  glfwTerminate();
+
+  return 0;
 }
