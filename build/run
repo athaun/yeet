@@ -1,6 +1,5 @@
 #!/bin/bash
 
-set -xe
 cd build
-./yeet_exe
+./yeet
 cd ..

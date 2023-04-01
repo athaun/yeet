@@ -1,0 +1,11 @@
+#!/bin/bash
+
+directory="build"
+filenames=("clean" "debug" "release" "run")
+
+for file in "$directory"/*; do
+  filename="${file##*/}"
+  if ! [[ "${filenames[@]}" =~ "$filename" ]]; then
+    rm -fr "$file"
+  fi
+done
