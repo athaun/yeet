@@ -56,18 +56,30 @@ function(add_module_to_interface MODULE_NAME INTERFACE_NAME)
   set(TARGET_NAME ${MODULE_NAME})
 
   file(GLOB_RECURSE MODULE_SOURCES
-       "${CMAKE_CURRENT_SOURCE_DIR}/lib/${MODULE_NAME}/*.cpp")
+       "${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}*.cpp")
 
   add_library(${TARGET_NAME} STATIC ${MODULE_SOURCES})
-  target_include_directories(${MODULE_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/lib/${MODULE_NAME}/include)
 
-  if(MODULE_NAME STREQUAL "setup")
-    target_include_directories(${MODULE_NAME} PUBLIC ${webgpu_SOURCE_DIR}/include)
-  endif()
+  # Include the directories of all fetched dependencies and other modules
+  target_include_directories(
+    ${MODULE_NAME}
+    PUBLIC lib/${MODULE_NAME}/include
+    PRIVATE ${webgpu_SOURCE_DIR}/include ${glfw_SOURCE_DIR}/include
+            ${glfw3webgpu_SOURCE_DIR})
 
-  target_link_libraries(${INTERFACE_NAME} INTERFACE ${MODULE_NAME})
-  list(APPEND MODULE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/lib/${MODULE_NAME}/include)
-  set(MODULE_INCLUDE_DIRECTORIES ${MODULE_INCLUDE_DIRECTORIES} PARENT_SCOPE)
+  # Add the directory of glfw3webgpu library
+  link_directories(${glfw3webgpu_SOURCE_DIR}/build)
+
+  # Iterate through other modules and add their include directories
+  foreach(OTHER_MODULE_NAME ${MODULE_NAMES})
+    if(NOT ${OTHER_MODULE_NAME} STREQUAL ${MODULE_NAME})
+      target_include_directories(${MODULE_NAME}
+                                 PRIVATE lib/${OTHER_MODULE_NAME}/include)
+    endif()
+  endforeach()
+
+  target_link_libraries(${INTERFACE_NAME} INTERFACE ${MODULE_NAME} glfw3webgpu
+  )# Add glfw3webgpu to the target_link_libraries
 endfunction()
 
 add_library(yeet INTERFACE)
@@ -76,10 +88,10 @@ foreach(MODULE_NAME ${MODULE_NAMES})
   add_module_to_interface(${MODULE_NAME} yeet)
 endforeach()
 
-target_include_directories(setup PUBLIC ${MODULE_INCLUDE_DIRECTORIES})
-
 enable_testing()
 add_executable(yeet_exe src/entry.cpp)
+
+# Adjust the order of linked libraries
 target_link_libraries(
   yeet_exe
   PRIVATE yeet
@@ -87,8 +99,9 @@ target_link_libraries(
           fmt::fmt
           Threads::Threads
           glfw
-          glfw3webgpu
           webgpu)
+target_link_libraries(yeet_exe PRIVATE $<TARGET_FILE:glfw3webgpu>)
+
 set_target_properties(yeet_exe PROPERTIES OUTPUT_NAME "yeet")
 
 if(MSVC)

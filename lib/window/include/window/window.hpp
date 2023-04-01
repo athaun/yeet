@@ -4,7 +4,6 @@
 #include <thread>
 
 #include <glfw3webgpu.h>
-
 #include <core/core.hpp>
 
 namespace yeet {
