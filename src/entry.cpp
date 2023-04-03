@@ -1,36 +1,22 @@
-#define WEBGPU_CPP_IMPLEMENTATION // THIS IS VERY IMPORTANT
+#define WEBGPU_CPP_IMPLEMENTATION
 #include <webgpu/webgpu.hpp>
+
 #include <window/window.hpp>
 
+namespace window = yeet::window;
+namespace WindowManager = window::WindowManager;
+using Window = window::Window;
+
 auto main() -> i32 {
-  yeet::WindowManager::init();
-  auto window = yeet::Window::init("Hello", 800, 600);
+    WindowManager::init();
+    auto window = Window::init({ 640, 480 }); // NOLINT
 
-  auto _ = defer([&] {
-    window.deinit();
-    yeet::WindowManager::deinit();
-  });
+    auto window_deinit = defer([&] {
+        window.deinit();
+        WindowManager::deinit();
+    });
 
-  auto instance = wgpu::createInstance(wgpu::InstanceDescriptor{});
-  auto surface = glfwGetWGPUSurface(instance, window.handle);
-
-  println("[INFO] Created WebGPU instance {}", fmt::ptr(&instance));
-
-  auto adapter_options = wgpu::RequestAdapterOptions();
-  adapter_options.powerPreference = wgpu::PowerPreference::HighPerformance;
-
-  auto adapter = instance.requestAdapter(adapter_options);
-
-  println("[INFO] Created WebGPU adapter {}", fmt::ptr(&adapter));
-
-  auto device_descriptor = wgpu::DeviceDescriptor();
-  device_descriptor.label = "Render Device";
-
-  auto device = adapter.requestDevice(device_descriptor);
-
-  println("[INFO] Created WebGPU device {}", fmt::ptr(&device));
-
-  while (!window.should_close()) {
-    yeet::Window::poll_every(50);
-  }
+    for ( ; !window.should_close(); ) {
+        WindowManager::poll_every(50); // NOLINT
+    }
 }

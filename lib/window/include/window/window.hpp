@@ -1,55 +1,69 @@
 #pragma once
 
+#include "GLFW/glfw3.h"
 #include <chrono>
 #include <thread>
 
-#include <glfw3webgpu.h>
 #include <core/core.hpp>
+#include <glfw3webgpu.h>
 
-namespace yeet {
+namespace yeet::window {
 
-struct WindowManager {
-  using Self = WindowManager;
+namespace WindowManager {
 
-  static auto init() -> void {
-    if (!glfwInit()) {
-      eprintln("[FATAL] Failed to initialize GLFW");
-      std::abort();
-    }
-  }
-
-  static auto deinit() -> void { glfwTerminate(); }
-
-  static auto hint() -> void { glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); };
-};
-
-struct Window {
-  using Self = Window;
-
-  GLFWwindow *handle;
-
-  static auto poll_every(const usize delay_millis) -> void {
+auto poll_every(const usize delay_millis) -> void {
     glfwPollEvents();
     std::this_thread::sleep_for(std::chrono::milliseconds(delay_millis));
-  }
+}
 
-  static auto init(const char *name, const f32 width, const f32 height)
-      -> Self {
-    WindowManager::hint();
-    auto window = glfwCreateWindow(width, height, name, nullptr, nullptr);
-    if (!window) {
-      WindowManager::deinit();
-      eprintln("[FATAL] Failed to create GLFW window");
-      std::abort();
+auto init() -> void {
+    if ( !static_cast<bool>(glfwInit()) ) {
+        eprintln("[FATAL] Failed to initialize GLFW");
+        std::abort();
     }
-    return Self{window};
-  }
+}
 
-  auto deinit() -> void { glfwDestroyWindow(self.handle); }
+auto deinit() -> void {
+    glfwTerminate();
+}
 
-  auto should_close() const -> bool {
-    return glfwWindowShouldClose(self.handle);
-  }
+auto hint() -> void {
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+}
+
+} // namespace WindowManager
+
+struct Window {
+    using Self = Window;
+
+    GLFWwindow* handle;
+    i32 width;
+    i32 height;
+
+    static auto init(
+        const Tuple<i32, i32> dimensions,
+        const char* name = "yeet"
+    ) -> Self {
+        WindowManager::hint();
+        const auto [width, height] = dimensions;
+        auto* window = glfwCreateWindow(width, height, name, nullptr, nullptr);
+        if ( window == nullptr ) {
+            WindowManager::deinit();
+            eprintln("[FATAL] Failed to create GLFW window");
+            std::abort();
+        }
+        return Self{ window, width, height };
+    }
+
+    auto deinit() -> void {
+        glfwDestroyWindow(self.handle);
+        self.handle = nullptr;
+    }
+
+    [[nodiscard]] auto should_close() const -> bool {
+        return static_cast<bool>(glfwWindowShouldClose(self.handle));
+    }
 };
 
-} // namespace yeet
+} // namespace yeet::window
