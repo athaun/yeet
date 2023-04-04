@@ -1,11 +1,16 @@
 #pragma once
 
-#include "GLFW/glfw3.h"
 #include <chrono>
 #include <thread>
 
-#include <core/core.hpp>
+#include <GLFW/glfw3.h>
 #include <glfw3webgpu.h>
+#define WEBGPU_CPP_IMPLEMENTATION
+#include <webgpu/webgpu.h>
+#include <webgpu/webgpu.hpp>
+#include <webgpu/wgpu.h>
+
+#include <core/core.hpp>
 
 namespace yeet::window {
 
@@ -63,6 +68,11 @@ struct Window {
 
     [[nodiscard]] auto should_close() const -> bool {
         return static_cast<bool>(glfwWindowShouldClose(self.handle));
+    }
+
+    [[nodiscard]] auto get_wgpu_surface(const wgpu::Instance instance) const
+        -> wgpu::Surface {
+        return glfwGetWGPUSurface(instance, self.handle);
     }
 };
 

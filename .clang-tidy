@@ -1,5 +1,5 @@
 ---
-Checks:          '-*,clang-diagnostic-*,clang-analyzer-*,modernize-*,readability-*,bugprone-*,concurrency-*,performance-*,portability-*'
+Checks:          '-*,clang-diagnostic-*,clang-analyzer-*,modernize-*,readability-*,bugprone-*,concurrency-*,performance-*,portability-*,-readability-uppercase-literal-suffix'
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 AnalyzeTemporaryDtors: false
