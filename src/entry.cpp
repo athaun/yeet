@@ -114,13 +114,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 )";
 
-constexpr static auto VERTS = Arr<f32, 30>{
-    -0.5f,  -0.5f, 1.0f, 0.0f, 0.0f, +0.5f,  -0.5f, 0.0f, 1.0f, 0.0f,
-    +0.0f,  +0.5f, 0.0f, 0.0f, 1.0f, -0.55f, -0.5f, 1.0f, 1.0f, 0.0f,
-    -0.05f, +0.5f, 1.0f, 0.0f, 1.0f, -0.55f, +0.5f, 0.0f, 1.0f, 1.0f,
-};
-
+constexpr static auto VERTS =
+    Arr<f32, 30>{ -0.5, -0.5, 1.0, 0.0, 0.0, +0.5, -0.5, 0.0, 1.0, 0.0,
+                  +0.5, +0.5, 0.0, 0.0, 1.0, -0.5, +0.5, 1.0, 1.0, 0.0 };
 constexpr static auto VERTS_COUNT = static_cast<i32>(VERTS.size() / 5);
+
+constexpr static auto INDICES = Arr<u16, 6>{
+    0, 1, 2, 0, 2, 3,
+};
+constexpr static auto INDICES_COUNT = static_cast<i32>(INDICES.size());
 
 struct State {
     Window window;
@@ -133,6 +135,7 @@ struct State {
     wgpu::ShaderModule shader_module;
     wgpu::RenderPipeline pipeline;
     wgpu::Buffer vertex_buffer;
+    wgpu::Buffer index_buffer;
 
     static auto init(Tuple<i32, i32> dimensions) -> State;
     auto deinit() -> void;
@@ -299,28 +302,39 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
     buffer_desc.usage = wgpu::BufferUsage::Vertex | wgpu::BufferUsage::CopyDst;
     buffer_desc.mappedAtCreation = false;
     auto vertex_buffer = device.createBuffer(buffer_desc);
-
+    queue.writeBuffer(vertex_buffer, 0, VERTS.data(), buffer_desc.size);
     println(
         "[INFO] Created Vertex Buffer: <{}>",
         static_cast<void*>(vertex_buffer)
     );
 
-    queue.writeBuffer(vertex_buffer, 0, VERTS.data(), buffer_desc.size);
+    // Init Index Buffer
+    buffer_desc.size = INDICES.size() * sizeof(u16);
+    buffer_desc.usage = wgpu::BufferUsage::Index | wgpu::BufferUsage::CopyDst;
+    auto index_buffer = device.createBuffer(buffer_desc);
+    println(
+        "[INFO] Created Index Buffer: <{}>",
+        static_cast<void*>(index_buffer)
+    );
 
-    return { window, instance,   surface,       adapter,  device,
-             queue,  swap_chain, shader_module, pipeline, vertex_buffer };
+    queue.writeBuffer(index_buffer, 0, INDICES.data(), buffer_desc.size);
+
+    return { window,   instance,      surface,     adapter,
+             device,   queue,         swap_chain,  shader_module,
+             pipeline, vertex_buffer, index_buffer };
 }
 
 auto State::deinit() -> void {
-    window.deinit();
-    device.destroy(); // This will free all resources created by the device
+    self.window.deinit();
+    self.device.destroy(); // This will free all resources created by the device
 
-    free(instance);
-    free(surface);
-    free(swap_chain);
-    free(shader_module);
-    free(pipeline);
-    free(vertex_buffer);
+    free(self.instance);
+    free(self.surface);
+    free(self.swap_chain);
+    free(self.shader_module);
+    free(self.pipeline);
+    free(self.vertex_buffer);
+    free(self.index_buffer);
 }
 
 auto State::render() -> void {
@@ -359,6 +373,14 @@ auto State::render() -> void {
     render_pass
         .setVertexBuffer(0, self.vertex_buffer, 0, VERTS.size() * sizeof(f32));
     render_pass.draw(VERTS_COUNT, 1, 0, 0);
+    render_pass.setIndexBuffer(
+        self.index_buffer,
+        wgpu::IndexFormat::Uint16,
+        0,
+        INDICES.size() * sizeof(u16)
+    );
+    render_pass.drawIndexed(INDICES_COUNT, 1, 0, 0, 0);
+    // render_pass.draw(VERTS_COUNT, 1, 0, 0); FOR VERTS ONLY
 
     render_pass.end();
 
