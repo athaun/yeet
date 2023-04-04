@@ -66,8 +66,9 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
     println("[INFO] Created Adapter: <{}>", static_cast<void*>(adapter));
 
     // Init Device
+    // TODO: (Carter) Find the best defaults cause shit goes wrong real quick
     auto required_limits = wgpu::RequiredLimits{};
-    required_limits.limits.maxVertexBufferArrayStride = 4;       // NOLINT
+    required_limits.limits.maxVertexBufferArrayStride = 2 * 4;   // NOLINT
     required_limits.limits.maxBufferSize = 1024;                 // NOLINT
     required_limits.limits.minStorageBufferOffsetAlignment = 32; // NOLINT
     required_limits.limits.minUniformBufferOffsetAlignment = 32; // NOLINT
@@ -146,7 +147,7 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
     auto vertex_buffer_layout = wgpu::VertexBufferLayout{};
     vertex_buffer_layout.attributeCount = 1;
     vertex_buffer_layout.attributes = &vertex_attrib;
-    vertex_buffer_layout.arrayStride = sizeof(f32);
+    vertex_buffer_layout.arrayStride = 2 * sizeof(f32);
     vertex_buffer_layout.stepMode = wgpu::VertexStepMode::Vertex;
 
     auto blend_state = wgpu::BlendState{};
