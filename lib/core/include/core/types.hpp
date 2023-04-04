@@ -16,18 +16,24 @@ using f32 = float;
 using f64 = double;
 
 #include <vector>
-template <typename T> using Vec = std::vector<T>;
+template<typename T>
+using Vec = std::vector<T>;
+
+#include <array>
+template<typename T, const u64 Size>
+using Arr = std::array<T, Size>;
 
 #include <string>
 using String = std::string;
 
 #include <tuple>
-template <typename... Ts> using Tuple = std::tuple<Ts...>;
+template<typename... Ts>
+using Tuple = std::tuple<Ts...>;
 
 #include <concepts>
 
-template <typename T>
-concept Resource = requires(T t) {
-  { T::init() } -> std::same_as<T>;
-  { t.deinit() } -> std::same_as<void>;
-};
+template<typename T>
+concept Resource = requires(T resource) {
+                       { T::init() } -> std::same_as<T>;
+                       { resource.deinit() } -> std::same_as<void>;
+                   };

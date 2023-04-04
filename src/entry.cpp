@@ -4,24 +4,123 @@ namespace window = yeet::window;
 namespace WindowManager = window::WindowManager;
 using Window = window::Window;
 
+template<>
+struct fmt::formatter<WGPULimits> {
+    constexpr static auto parse(format_parse_context& ctx)
+        -> decltype(ctx.begin()) {
+        return ctx.begin();
+    }
+
+    template<typename FormatContext>
+    auto format(const wgpu::Limits& limits, FormatContext& ctx)
+        -> decltype(ctx.out()) {
+        return fmt::format_to(
+            ctx.out(),
+            "wgpu::Limits:\n"
+            "  maxTextureDimension1D: {},\n"
+            "  maxTextureDimension2d: {},\n"
+            "  maxTextureDimension3d: {},\n"
+            "  maxTextureArrayLayers: {},\n"
+            "  maxBindGroups: {},\n"
+            "  maxBindingsPerBindGroup: {},\n"
+            "  maxDynamicUniformBuffersPerPipelineLayout: {},\n"
+            "  maxDynamicStorageBuffersPerPipelineLayout: {},\n"
+            "  maxSampledTexturesPerShaderStage: {},\n"
+            "  maxUniformBuffersPerShaderStage: {},\n"
+            "  maxUniformBufferBindingSize: {},\n"
+            "  maxStorageBufferBindingSize: {},\n"
+            "  minUniformBufferOffsetAlignment: {},\n"
+            "  minStorageBufferOffsetAlignment: {},\n"
+            "  maxVertexBuffers: {},\n"
+            "  maxBufferSize: {},\n"
+            "  maxVertexAttributes: {},\n"
+            "  maxVertexBufferArrayStride: {},\n"
+            "  maxInterStageShaderComponents: {},\n"
+            "  maxInterStageShaderVariables: {},\n"
+            "  maxColorAttachments: {},\n"
+            "  maxColorAttachmentBytesPerSample: {},\n"
+            "  maxComputeWorkgroupStorageSize: {},\n"
+            "  maxComputeInvocationsPerWorkgroup: {},\n"
+            "  maxComputeWorkgroupSizeX: {},\n"
+            "  maxComputeWorkgroupSizeY: {},\n"
+            "  maxComputeWorkgroupSizeZ: {},\n"
+            "  maxComputeWorkgroupsPerDimension: {}\n",
+            limits.maxTextureDimension1D,
+            limits.maxTextureDimension2D,
+            limits.maxTextureDimension3D,
+            limits.maxTextureArrayLayers,
+            limits.maxBindGroups,
+            limits.maxBindingsPerBindGroup,
+            limits.maxDynamicUniformBuffersPerPipelineLayout,
+            limits.maxDynamicStorageBuffersPerPipelineLayout,
+            limits.maxSampledTexturesPerShaderStage,
+            limits.maxUniformBuffersPerShaderStage,
+            limits.maxUniformBufferBindingSize,
+            limits.maxStorageBufferBindingSize,
+            limits.minUniformBufferOffsetAlignment,
+            limits.minStorageBufferOffsetAlignment,
+            limits.maxVertexBuffers,
+            limits.maxBufferSize,
+            limits.maxVertexAttributes,
+            limits.maxVertexBufferArrayStride,
+            limits.maxInterStageShaderComponents,
+            limits.maxInterStageShaderVariables,
+            limits.maxColorAttachments,
+            limits.maxColorAttachmentBytesPerSample,
+            limits.maxComputeWorkgroupStorageSize,
+            limits.maxComputeInvocationsPerWorkgroup,
+            limits.maxComputeWorkgroupSizeX,
+            limits.maxComputeWorkgroupSizeY,
+            limits.maxComputeWorkgroupSizeZ,
+            limits.maxComputeWorkgroupsPerDimension
+        );
+    }
+};
+
 constexpr static auto DIMENSIONS = Tuple<i32, i32>{ 640, 480 };
 
 static const auto SHADER = R"(
+/**
+ * A structure with fields labeled with vertex attribute locations can be used
+ * as input to the entry point of a shader.
+ */
+struct VertexInput {
+	@location(0) position: vec2<f32>,
+	@location(1) color: vec3<f32>,
+};
+/**
+ * A structure with fields labeled with builtins and locations can also be used
+ * as *output* of the vertex shader, which is also the input of the fragment
+ * shader.
+ */
+struct VertexOutput {
+	@builtin(position) position: vec4<f32>,
+	// The location here does not refer to a vertex attribute, it just means
+	// that this field must be handled by the rasterizer.
+	// (It can also refer to another field of another struct that would be used
+	// as input to the fragment shader.)
+	@location(0) color: vec3<f32>,
+};
 @vertex
-fn vs_main(@location(0) in_vertex_position: vec2<f32>) -> @builtin(position) vec4<f32> {
-	return vec4<f32>(in_vertex_position, 0.0, 1.0);
+fn vs_main(in: VertexInput) -> VertexOutput {
+	var out: VertexOutput;
+	out.position = vec4<f32>(in.position, 0.0, 1.0);
+	out.color = in.color; // forward to the fragment shader
+	return out;
 }
-
 @fragment
-fn fs_main() -> @location(0) vec4<f32> {
-    return vec4<f32>(0.0, 0.4, 1.0, 1.0);
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+	return vec4<f32>(in.color, 1.0);
 }
 )";
 
-static const auto VERTS = Vec<f32>{ -0.5,   -0.5, +0.5,   -0.5, +0.0,   +0.5,
-                                    -0.55f, -0.5, -0.05f, +0.5, -0.55f, +0.5 };
+constexpr static auto VERTS = Arr<f32, 30>{
+    -0.5f,  -0.5f, 1.0f, 0.0f, 0.0f, +0.5f,  -0.5f, 0.0f, 1.0f, 0.0f,
+    +0.0f,  +0.5f, 0.0f, 0.0f, 1.0f, -0.55f, -0.5f, 1.0f, 1.0f, 0.0f,
+    -0.05f, +0.5f, 1.0f, 0.0f, 1.0f, -0.55f, +0.5f, 0.0f, 1.0f, 1.0f,
+};
 
-static const auto VERTS_COUNT = static_cast<i32>(VERTS.size() / 2);
+constexpr static auto VERTS_COUNT = static_cast<i32>(VERTS.size() / 5);
 
 struct State {
     Window window;
@@ -33,7 +132,6 @@ struct State {
     wgpu::SwapChain swap_chain;
     wgpu::ShaderModule shader_module;
     wgpu::RenderPipeline pipeline;
-    wgpu::PipelineLayout pipeline_layout;
     wgpu::Buffer vertex_buffer;
 
     static auto init(Tuple<i32, i32> dimensions) -> State;
@@ -65,15 +163,15 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
     auto adapter = instance.requestAdapter(adapter_opts);
     println("[INFO] Created Adapter: <{}>", static_cast<void*>(adapter));
 
+    auto supported_limits = wgpu::SupportedLimits{};
+    adapter.getLimits(&supported_limits);
+    println("[INFO] Supported Adapter Limits: \n{}", supported_limits.limits);
+
     // Init Device
-    // TODO: (Carter) Find the best defaults cause shit goes wrong real quick
     auto required_limits = wgpu::RequiredLimits{};
-    required_limits.limits.maxVertexBufferArrayStride = 2 * 4;   // NOLINT
-    required_limits.limits.maxBufferSize = 1024;                 // NOLINT
-    required_limits.limits.minStorageBufferOffsetAlignment = 32; // NOLINT
-    required_limits.limits.minUniformBufferOffsetAlignment = 32; // NOLINT
-    required_limits.limits.maxVertexAttributes = 1; // Change in future
-    required_limits.limits.maxVertexBuffers = 1;    // Change in future
+    required_limits.limits = supported_limits.limits;
+    required_limits.limits.maxVertexAttributes = 2;
+    required_limits.limits.maxVertexBuffers = 1;
 
     auto device_desc = wgpu::DeviceDescriptor{};
     device_desc.label = "Render Device";
@@ -83,13 +181,6 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
 
     auto device = adapter.requestDevice(device_desc);
     println("[INFO] Created Device: <{}>", static_cast<void*>(device));
-
-    auto supported_limits = wgpu::SupportedLimits{};
-    adapter.getLimits(&supported_limits);
-    println(
-        "[INFO] Supported Adapter Max Vertex Attributes: <{}>",
-        supported_limits.limits.maxVertexAttributes
-    );
 
     device.getLimits(&supported_limits);
     println(
@@ -139,15 +230,19 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
     primitive_state.frontFace = wgpu::FrontFace::CCW;
     primitive_state.cullMode = wgpu::CullMode::None;
 
-    auto vertex_attrib = wgpu::VertexAttribute{};
-    vertex_attrib.shaderLocation = 0;
-    vertex_attrib.format = wgpu::VertexFormat::Float32x2;
-    vertex_attrib.offset = 0;
+    auto vertex_attribs = Arr<wgpu::VertexAttribute, 2>{};
+    vertex_attribs [0].shaderLocation = 0;
+    vertex_attribs [0].format = wgpu::VertexFormat::Float32x2;
+    vertex_attribs [0].offset = 0;
+    vertex_attribs [1].shaderLocation = 1;
+    vertex_attribs [1].format = wgpu::VertexFormat::Float32x3;
+    vertex_attribs [1].offset = 2 * sizeof(f32);
 
     auto vertex_buffer_layout = wgpu::VertexBufferLayout{};
-    vertex_buffer_layout.attributeCount = 1;
-    vertex_buffer_layout.attributes = &vertex_attrib;
-    vertex_buffer_layout.arrayStride = 2 * sizeof(f32);
+    vertex_buffer_layout.attributeCount =
+        static_cast<u32>(vertex_attribs.size());
+    vertex_buffer_layout.attributes = vertex_attribs.data();
+    vertex_buffer_layout.arrayStride = 5 * sizeof(f32); // NOLINT
     vertex_buffer_layout.stepMode = wgpu::VertexStepMode::Vertex;
 
     auto blend_state = wgpu::BlendState{};
@@ -196,6 +291,7 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
         "[INFO] Created Render Pipeline: <{}>",
         static_cast<void*>(pipeline)
     );
+    free(pipeline_layout);
 
     // Init Vertex Buffer
     auto buffer_desc = wgpu::BufferDescriptor{};
@@ -211,9 +307,8 @@ auto State::init(const Tuple<i32, i32> dimensions) -> State {
 
     queue.writeBuffer(vertex_buffer, 0, VERTS.data(), buffer_desc.size);
 
-    return { window,   instance,        surface,      adapter,
-             device,   queue,           swap_chain,   shader_module,
-             pipeline, pipeline_layout, vertex_buffer };
+    return { window, instance,   surface,       adapter,  device,
+             queue,  swap_chain, shader_module, pipeline, vertex_buffer };
 }
 
 auto State::deinit() -> void {
@@ -223,8 +318,8 @@ auto State::deinit() -> void {
     free(instance);
     free(surface);
     free(swap_chain);
+    free(shader_module);
     free(pipeline);
-    free(pipeline_layout);
     free(vertex_buffer);
 }
 
@@ -248,7 +343,7 @@ auto State::render() -> void {
     color_attachment.resolveTarget = nullptr;
     color_attachment.loadOp = wgpu::LoadOp::Clear;
     color_attachment.storeOp = wgpu::StoreOp::Store;
-    color_attachment.clearValue = { 0.9f, 0.1f, 0.2f, 1.0f }; // NOLINT
+    color_attachment.clearValue = { 0.05f, 0.05f, 0.05f, 1.0f }; // NOLINT
 
     auto render_pass_desc = wgpu::RenderPassDescriptor{};
     render_pass_desc.colorAttachmentCount = 1;
